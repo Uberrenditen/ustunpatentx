@@ -1,72 +1,90 @@
 import { getBerlinParts } from "./berlin";
-import { replaceDayQueue, type QueueTweet } from "./store";
+import { loadPublisherConfig, loadPublisherRuntime, type PublisherConfig } from "./publisher-config";
+import { loadConfig } from "./store";
 
-const FIRST_HOUR = 7;
-const LAST_HOUR = 22;
-
-const TOPICS = [
-  ["MARKA", "Marka tescili yalnızca bir başvuru değildir: sınıf, benzerlik ve itiraz korumayı belirler."],
-  ["PATENT", "Patent, teknik çözümü 20 yıl korur — ancak tarifname yenilik açısından net olmalıdır."],
-  ["TASARIM", "Tasarım tescili dış görünümü korur. Tescil yoksa taklit çoğu zaman cezasız kalır."],
-  ["MADRID", "Yurt dışı marka: Madrid Protokolü zaman kazandırır, yerel stratejinin yerini tutmaz."],
-  ["TPE", "TÜRKPATENT her gün ilan yayınlar. Takip etmeyen, itiraz sürelerini kaçırır."],
-  ["360", "360 derece koruma: tescil, izleme, alan adı ve taklitler birlikte ele alınır."],
-  ["SINIF", "Yanlış Nice sınıfları, bir markanın sonradan tutmamasının en sık nedenidir."],
-  ["ITIRAZ", "İtiraz yalnızca süre içinde işe yarar. Sonra benzer marka pahalı bir uyuşmazlığa dönüşür."],
-  ["TELIF", "Telif hakkı eser ile doğar — icra için yine de kanıt ve strateji gerekir."],
-  ["COGRAFI", "Coğrafi işaret menşei ve kaliteyi korur. Kendi kelime markasının yerine geçmez."],
-  ["ARGE", "Patent başvurusundan önce yenilik araştırması yapın. Aksi halde yeni olmayan bir başvuruya ödeme yapılır."],
-  ["KVKK", "IP dosyasındaki müşteri verileri kişisel veridir. Marka koruması ve veri koruması paralel yürür."],
-  ["STARTUP", "Girişimler için önce marka ve alan adı, sonra büyüme. Tersi rebranding’i pahalılaştırır."],
-  ["LISANS", "Net marka/patent zinciri olmayan lisans sözleşmeleri sonradan zor icra edilir."],
-  ["BELGE", "Öncelik önemlidir. Kullanım, tasarım ve başvuruyu belgelendirmeyen, uyuşmazlıkta kaybeder."],
-  ["TAKIP", "Marka takibi: taklitler tescil edilebilir hale gelmeden önce günlük ilanları tarayın."],
-];
-
-function buildTweet(index: number): string {
-  const [ticker, body] = TOPICS[index % TOPICS.length];
-  return [
-    body,
-    "",
-    "Üstün Patent; başvuru, araştırma ve sürekli izlemede yanınızda.",
-    "",
-    `#${ticker} #FikriMulkiyet #UstunPatent`,
-  ].join("\n");
-}
-
-export function tweetForNow(now = new Date()): {
-  ticker: string;
+export type GeneratedPost = {
   text: string;
-  hour: number;
-  dateKey: string;
-} {
-  const { dateKey, hour } = getBerlinParts(now);
-  const index = Math.max(0, Math.min(LAST_HOUR, hour) - FIRST_HOUR);
-  const [ticker] = TOPICS[index % TOPICS.length];
-  return { ticker, text: buildTweet(index), hour, dateKey };
+  ticker: string;
+};
+
+function extractTicker(text: string): string {
+  const tag = text.match(/#([A-Za-z0-9ÇĞİÖŞÜçğıöşü_]{2,20})/);
+  return tag?.[1]?.toUpperCase() ?? "IP";
 }
 
-export async function regenerateTodayQueue(): Promise<{ dayKey: string; count: number }> {
-  const { dateKey } = getBerlinParts();
-  const tweets: QueueTweet[] = [];
-  let hour = FIRST_HOUR;
-  let index = 0;
-  while (hour <= LAST_HOUR) {
-    const [ticker] = TOPICS[index % TOPICS.length];
-    tweets.push({
-      id: `${dateKey}_${ticker}_${index}`,
-      dayKey: dateKey,
-      hour,
-      ticker,
-      text: buildTweet(index),
-      posted: false,
-      tweetId: null,
-      postedAt: null,
-      status: "queued",
-    });
-    hour += 1;
-    index += 1;
+function cleanPost(text: string): string {
+  return text
+    .replace(/^```(?:text|tweet)?\s*/i, "")
+    .replace(/```$/i, "")
+    .replace(/^["«»]|["«»]$/g, "")
+    .trim();
+}
+
+export async function generatePostFromPrompt(opts?: {
+  prompt?: string;
+  apiKey?: string;
+  recentTexts?: string[];
+}): Promise<GeneratedPost> {
+  const config = opts?.prompt ? null : await loadPublisherConfig();
+  const runtime = opts?.recentTexts ? null : await loadPublisherRuntime();
+  const prompt = (opts?.prompt ?? config?.prompt ?? "").trim();
+  if (!prompt) {
+    throw new Error("Prompt boş. Yönetim panelinden bir prompt kaydedin.");
   }
-  await replaceDayQueue(dateKey, tweets);
-  return { dayKey: dateKey, count: tweets.length };
+  let apiKey = (opts?.apiKey ?? process.env.OPENAI_API_KEY ?? "").trim();
+  if (!apiKey) {
+    const stored = await loadConfig();
+    apiKey = stored.openaiKey?.trim() || "";
+  }
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY eksik. İçerik üretmek için bir OpenAI anahtarı gerekir.");
+  }
+  const recent = (opts?.recentTexts ?? runtime?.recentTexts ?? []).filter(Boolean).slice(0, 8);
+  const { dateKey, hour, minute } = getBerlinParts();
+  const user = [
+    prompt,
+    "",
+    `Şu an Europe/Berlin: ${dateKey} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    recent.length ? `Son paylaşılan metinleri tekrarlama:\n- ${recent.join("\n- ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const baseUrl = (process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1").replace(/\/$/, "");
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.95,
+      max_tokens: 220,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write a single social post. Output only the post text. No preamble, no markdown fences, no surrounding quotes.",
+        },
+        { role: "user", content: user },
+      ],
+    }),
+  });
+  const json = (await res.json()) as {
+    error?: { message?: string };
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  if (!res.ok) {
+    throw new Error(json.error?.message || `OpenAI hatası (${res.status})`);
+  }
+  const text = cleanPost(json.choices?.[0]?.message?.content || "");
+  if (!text) throw new Error("Model boş metin döndü");
+  return { text, ticker: extractTicker(text) };
+}
+
+export async function previewGeneratedPost(config?: PublisherConfig): Promise<GeneratedPost> {
+  const publisher = config ?? (await loadPublisherConfig());
+  return generatePostFromPrompt({ prompt: publisher.prompt });
 }

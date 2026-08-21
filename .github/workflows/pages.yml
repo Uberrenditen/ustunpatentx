@@ -3,6 +3,8 @@ name: GitHub Pages
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "config/runtime.json"
   workflow_dispatch:
 
 permissions:

@@ -2,16 +2,19 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GitHubHostingPanel } from "../github-hosting";
 
-export default function LoginPage() {
-  if (process.env.NEXT_PUBLIC_GITHUB_PAGES === "true") {
-    return <GitHubHostingPanel />;
-  }
-  return <LoginPageLive />;
+const IS_PAGES = process.env.NEXT_PUBLIC_GITHUB_PAGES === "true";
+const ADMIN_HASH =
+  process.env.NEXT_PUBLIC_ADMIN_PASSWORD_SHA256 ||
+  "76914b4e173680ddc24820eae88b71c593881db177b8d4d69728658369daf8bc";
+
+async function sha256Hex(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function LoginPageLive() {
+export default function LoginPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +25,13 @@ function LoginPageLive() {
     setSaving(true);
     setError(null);
     try {
+      if (IS_PAGES) {
+        const hash = await sha256Hex(password);
+        if (hash !== ADMIN_HASH) throw new Error("Giriş başarısız");
+        sessionStorage.setItem("upx_ok", "1");
+        router.replace("/admin/x");
+        return;
+      }
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

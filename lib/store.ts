@@ -9,6 +9,7 @@ export type StoredConfig = {
   apiSecret?: string;
   accessToken?: string;
   accessTokenSecret?: string;
+  openaiKey?: string;
   enabled?: boolean;
   postsPerRun?: number;
   updatedAt?: string;
@@ -88,6 +89,7 @@ export async function saveConfig(patch: Partial<StoredConfig>): Promise<StoredCo
   apply("apiSecret", patch.apiSecret);
   apply("accessToken", patch.accessToken);
   apply("accessTokenSecret", patch.accessTokenSecret);
+  apply("openaiKey", patch.openaiKey);
   if (typeof patch.enabled === "boolean") next.enabled = patch.enabled;
   if (typeof patch.postsPerRun === "number" && Number.isFinite(patch.postsPerRun)) {
     next.postsPerRun = Math.min(Math.max(Math.floor(patch.postsPerRun), 1), 5);
@@ -118,6 +120,7 @@ export function revealedSecrets(stored: StoredConfig) {
     apiSecret: reveal(stored.apiSecret || process.env.X_API_SECRET),
     accessToken: reveal(stored.accessToken || process.env.X_ACCESS_TOKEN),
     accessTokenSecret: reveal(stored.accessTokenSecret || process.env.X_ACCESS_TOKEN_SECRET),
+    openaiKey: reveal(stored.openaiKey || process.env.OPENAI_API_KEY),
   };
 }
 
@@ -135,6 +138,12 @@ export async function replaceDayQueue(dayKey: string, tweets: QueueTweet[]): Pro
   const kept = state.tweets.filter((row) => row.dayKey !== dayKey || row.status === "posted");
   const postedIds = new Set(kept.filter((row) => row.dayKey === dayKey).map((row) => row.id));
   state.tweets = [...kept, ...tweets.filter((row) => !postedIds.has(row.id))];
+  await writeState(state);
+}
+
+export async function appendTweet(tweet: QueueTweet): Promise<void> {
+  const state = await readState();
+  state.tweets = [tweet, ...state.tweets].slice(0, 200);
   await writeState(state);
 }
 

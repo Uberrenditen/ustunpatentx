@@ -1,10 +1,17 @@
-import { getBerlinParts, isPublishHour } from "./berlin";
-import { createXPost, splitIntoTweetParts } from "./x-api";
-import { regenerateTodayQueue } from "./generate";
+import { getBerlinParts } from "./berlin";
+import { generatePostFromPrompt } from "./generate";
 import {
+  intervalElapsed,
+  isWithinSchedule,
+  loadPublisherConfig,
+  loadPublisherRuntime,
+  savePublisherRuntime,
+} from "./publisher-config";
+import { createXPost, splitIntoTweetParts } from "./x-api";
+import {
+  appendTweet,
   listTweets,
   loadConfig,
-  markTweet,
   recordPublishResult,
   resolveXApiConfig,
 } from "./store";
@@ -25,15 +32,12 @@ export type PublishResult = {
   dayKey?: string;
   posted: Array<{ ticker: string; tweetId: string | null }>;
   remaining: number;
+  text?: string;
 };
 
 export async function previewQueue() {
   const { dateKey } = getBerlinParts();
-  let tweets = (await listTweets()).filter((row) => row.dayKey === dateKey);
-  if (tweets.length === 0) {
-    await regenerateTodayQueue();
-    tweets = (await listTweets()).filter((row) => row.dayKey === dateKey);
-  }
+  const tweets = (await listTweets()).filter((row) => row.dayKey === dateKey);
   const preview: PreviewTweet[] = tweets.map((row) => ({
     ticker: row.ticker,
     text: row.text,
@@ -51,18 +55,39 @@ export async function previewQueue() {
   };
 }
 
+async function postText(cfg: NonNullable<Awaited<ReturnType<typeof resolveXApiConfig>>>, text: string) {
+  let result = await createXPost(cfg, text);
+  if (!result.ok && result.tooLong) {
+    const parts = splitIntoTweetParts(text);
+    let replyTo: string | undefined;
+    for (const part of parts) {
+      result = await createXPost(cfg, part, replyTo);
+      if (!result.ok) break;
+      replyTo = result.tweetId;
+    }
+  }
+  return result;
+}
+
 export async function publishNext(opts?: {
   force?: boolean;
   manual?: boolean;
   maxPosts?: number;
 }): Promise<PublishResult> {
-  if (!opts?.force && !opts?.manual && !isPublishHour()) {
-    return { ok: true, skipped: true, reason: "outside_7_22_berlin", posted: [], remaining: 0 };
+  const publisher = await loadPublisherConfig();
+  const runtime = await loadPublisherRuntime();
+  const { dateKey, hour } = getBerlinParts();
+
+  if (!opts?.force && !opts?.manual && !isWithinSchedule(publisher)) {
+    return { ok: true, skipped: true, reason: "outside_schedule", posted: [], remaining: 0 };
+  }
+  if (!opts?.force && !opts?.manual && !intervalElapsed(runtime, publisher.intervalMinutes)) {
+    return { ok: true, skipped: true, reason: "interval_not_elapsed", posted: [], remaining: 0 };
   }
 
   const config = await loadConfig();
   const cfg = await resolveXApiConfig();
-  const enabled = config.enabled !== false;
+  const enabled = publisher.enabled && config.enabled !== false;
   if (!cfg) {
     return { ok: true, skipped: true, reason: "x_api_not_configured", posted: [], remaining: 0 };
   }
@@ -70,36 +95,32 @@ export async function publishNext(opts?: {
     return { ok: true, skipped: true, reason: "x_news_publish_disabled", posted: [], remaining: 0 };
   }
 
-  const { dateKey } = getBerlinParts();
-  let tweets = (await listTweets()).filter((row) => row.dayKey === dateKey);
-  if (tweets.length === 0) {
-    await regenerateTodayQueue();
-    tweets = (await listTweets()).filter((row) => row.dayKey === dateKey);
-  }
-
-  const queue = tweets.filter((row) => row.status === "queued");
-  const limit = opts?.maxPosts ?? Math.min(Math.max(config.postsPerRun ?? 1, 1), 5);
+  const limit = opts?.maxPosts ?? publisher.postsPerRun;
   const posted: PublishResult["posted"] = [];
+  let lastText = "";
 
-  for (const tweet of queue) {
-    if (posted.length >= limit) break;
-    let result = await createXPost(cfg, tweet.text);
-    if (!result.ok && result.tooLong) {
-      const parts = splitIntoTweetParts(tweet.text);
-      let replyTo: string | undefined;
-      for (const part of parts) {
-        result = await createXPost(cfg, part, replyTo);
-        if (!result.ok) break;
-        replyTo = result.tweetId;
-      }
-    }
+  for (let i = 0; i < limit; i += 1) {
+    const generated = await generatePostFromPrompt({
+      prompt: publisher.prompt,
+      recentTexts: [lastText, ...runtime.recentTexts].filter(Boolean),
+    });
+    lastText = generated.text;
+    const result = await postText(cfg, generated.text);
+    const nowIso = new Date().toISOString();
+
     if (!result.ok && result.duplicate) {
-      await markTweet(tweet.id, {
-        status: "skipped",
+      await appendTweet({
+        id: `${dateKey}_${Date.now()}_${i}`,
+        dayKey: dateKey,
+        hour,
+        ticker: generated.ticker,
+        text: generated.text,
         posted: false,
-        postedAt: new Date().toISOString(),
+        tweetId: null,
+        postedAt: nowIso,
+        status: "skipped",
       });
-      posted.push({ ticker: tweet.ticker, tweetId: null });
+      posted.push({ ticker: generated.ticker, tweetId: null });
       continue;
     }
     if (!result.ok) {
@@ -114,26 +135,35 @@ export async function publishNext(opts?: {
         errorCode: result.errorCode,
         dayKey: dateKey,
         posted,
-        remaining: queue.length - posted.length,
+        remaining: 0,
+        text: generated.text,
       };
     }
-    await markTweet(tweet.id, {
-      status: "posted",
+
+    await appendTweet({
+      id: `${dateKey}_${Date.now()}_${i}`,
+      dayKey: dateKey,
+      hour,
+      ticker: generated.ticker,
+      text: generated.text,
       posted: true,
       tweetId: result.tweetId,
-      postedAt: new Date().toISOString(),
+      postedAt: nowIso,
+      status: "posted",
     });
-    posted.push({ ticker: tweet.ticker, tweetId: result.tweetId });
+    posted.push({ ticker: generated.ticker, tweetId: result.tweetId });
+    runtime.recentTexts = [generated.text, ...runtime.recentTexts].slice(0, 20);
   }
 
   if (posted.length === 0) {
-    const result = { ok: true, skipped: true, reason: "queue_empty", dayKey: dateKey, posted: [], remaining: 0 };
+    const result = { ok: true, skipped: true, reason: "nothing_posted", dayKey: dateKey, posted: [], remaining: 0 };
     await recordPublishResult(result);
     return result;
   }
 
-  const remaining = Math.max(0, queue.length - posted.length);
-  const result = { ok: true, dayKey: dateKey, posted, remaining };
+  runtime.lastPublishAt = new Date().toISOString();
+  await savePublisherRuntime(runtime);
+  const result = { ok: true, dayKey: dateKey, posted, remaining: 0, text: lastText };
   await recordPublishResult(result);
   return result;
 }
