@@ -13,7 +13,7 @@ async function run(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   const header = request.headers.get("authorization");
   if (secret && header !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
   }
   const result = await publishNext();
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });

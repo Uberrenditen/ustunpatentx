@@ -19,5 +19,5 @@ export async function isAdminSession(): Promise<boolean> {
 
 export async function requireAdmin(): Promise<Response | null> {
   if (await isAdminSession()) return null;
-  return Response.json({ error: "Nicht angemeldet" }, { status: 401 });
+  return Response.json({ error: "Oturum açık değil" }, { status: 401 });
 }

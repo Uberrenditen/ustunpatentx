@@ -38,7 +38,7 @@ export async function PUT(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Ungültiger Body" }, { status: 400 });
+    return NextResponse.json({ error: "Geçersiz istek" }, { status: 400 });
   }
 
   const str = (v: unknown) => (typeof v === "string" ? v : undefined);

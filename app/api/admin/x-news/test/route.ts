@@ -8,7 +8,7 @@ export async function POST() {
   if (denied) return denied;
   const cfg = await resolveXApiConfig();
   if (!cfg) {
-    return NextResponse.json({ ok: false, error: "Keys fehlen", errorCode: "generic" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Anahtarlar eksik", errorCode: "generic" }, { status: 400 });
   }
   const result = await verifyXConnection(cfg);
   if (!result.ok) {

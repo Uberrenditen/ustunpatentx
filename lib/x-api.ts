@@ -47,7 +47,7 @@ export function extractXErrorText(json: unknown, raw: string): string {
       }
     }
   }
-  return raw.trim().slice(0, 400) || "X-API-Fehler";
+  return raw.trim().slice(0, 400) || "X API hatası";
 }
 
 export function classifyXApiError(status: number, text: string): XApiErrorCode {
@@ -102,7 +102,7 @@ export async function createXPost(
       : { text };
     const { data } = await xClient(cfg).v2.tweet(payload);
     if (!data?.id) {
-      return { ok: false, status: 200, error: "X-Antwort ohne Tweet-ID", errorCode: "generic" };
+      return { ok: false, status: 200, error: "X yanıtında tweet kimliği yok", errorCode: "generic" };
     }
     return { ok: true, tweetId: data.id };
   } catch (err) {

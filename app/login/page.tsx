@@ -20,10 +20,10 @@ export default function LoginPage() {
         body: JSON.stringify({ password }),
       });
       const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error || "Login fehlgeschlagen");
+      if (!res.ok) throw new Error(json.error || "Giriş başarısız");
       router.replace("/admin/x");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login fehlgeschlagen");
+      setError(err instanceof Error ? err.message : "Giriş başarısız");
     } finally {
       setSaving(false);
     }
@@ -36,7 +36,7 @@ export default function LoginPage() {
         className="w-full max-w-sm rounded-2xl border border-black/10 bg-white p-6 shadow-sm"
       >
         <h1 className="text-lg font-extrabold uppercase tracking-wide">Üstün Patent X</h1>
-        <p className="mt-1 text-sm text-black/55">Admin-Passwort eingeben</p>
+        <p className="mt-1 text-sm text-black/55">Yönetici şifresini girin</p>
         <input
           type="password"
           value={password}
@@ -50,7 +50,7 @@ export default function LoginPage() {
           disabled={saving}
           className="mt-4 w-full rounded-xl bg-black px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
         >
-          {saving ? "…" : "Anmelden"}
+          {saving ? "…" : "Giriş Yap"}
         </button>
       </form>
     </div>
