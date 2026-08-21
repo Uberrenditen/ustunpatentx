@@ -4,7 +4,6 @@ import { INTERVAL_OPTIONS } from "@/lib/publisher-settings";
 import { AdminShell } from "../AdminShell";
 import {
   DAYS,
-  IS_PAGES,
   SecretField,
   emptySecret,
   intervalLabel,
@@ -145,67 +144,101 @@ export default function AdminSettingsPage() {
       </section>
 
       <section className="rounded-xl border border-zinc-300 bg-white p-4 sm:p-5">
-        <h2 className="mb-4 text-sm font-extrabold uppercase tracking-wide text-zinc-950">Anahtarlar</h2>
-        {IS_PAGES ? (
-          <div className="space-y-3 text-sm font-medium text-zinc-700">
-            <p>
-              X ve OpenAI anahtarları GitHub Secrets içine bir kez konur:{" "}
-              <code className="rounded bg-zinc-100 px-1 font-mono text-xs text-zinc-950">X_API_KEY</code>,{" "}
-              <code className="rounded bg-zinc-100 px-1 font-mono text-xs text-zinc-950">X_API_SECRET</code>,{" "}
-              <code className="rounded bg-zinc-100 px-1 font-mono text-xs text-zinc-950">X_ACCESS_TOKEN</code>,{" "}
-              <code className="rounded bg-zinc-100 px-1 font-mono text-xs text-zinc-950">X_ACCESS_TOKEN_SECRET</code>,{" "}
-              <code className="rounded bg-zinc-100 px-1 font-mono text-xs text-zinc-950">OPENAI_API_KEY</code>
-            </p>
-            <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-zinc-700">
-                GitHub token (ayar kaydı)
-              </span>
-              <p className="mt-0.5 text-[11px] text-zinc-600">
-                Contents + Actions izni olan bir token. Sadece bu tarayıcıda saklanır.
-              </p>
-              <input
-                type="password"
-                autoComplete="off"
-                value={admin.githubToken}
-                onChange={(e) => admin.setGithubToken(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-zinc-400 bg-white px-3 py-2.5 font-mono text-sm text-zinc-950 outline-none focus:border-zinc-900"
-              />
-            </label>
-          </div>
-        ) : admin.loading && !admin.data ? (
+        <h2 className="mb-1 text-sm font-extrabold uppercase tracking-wide text-zinc-950">Anahtarlar</h2>
+        <p className="mb-4 text-sm font-medium text-zinc-700">
+          Otomatik paylaşım için gerekli tüm anahtarlar. Boş bırakılan alanlar mevcut kayıtları silmez.
+        </p>
+        {admin.loading && !admin.data ? (
           <p className="text-sm font-medium text-zinc-600">Yükleniyor…</p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SecretField
-              label="API Key"
-              value={admin.apiKey}
-              onChange={admin.setApiKey}
-              status={secrets?.apiKey ?? emptySecret}
-            />
-            <SecretField
-              label="API Secret"
-              value={admin.apiSecret}
-              onChange={admin.setApiSecret}
-              status={secrets?.apiSecret ?? emptySecret}
-            />
-            <SecretField
-              label="Access Token"
-              value={admin.accessToken}
-              onChange={admin.setAccessToken}
-              status={secrets?.accessToken ?? emptySecret}
-            />
-            <SecretField
-              label="Access Token Secret"
-              value={admin.accessTokenSecret}
-              onChange={admin.setAccessTokenSecret}
-              status={secrets?.accessTokenSecret ?? emptySecret}
-            />
-            <SecretField
-              label="OpenAI API Key"
-              value={admin.openaiKey}
-              onChange={admin.setOpenaiKey}
-              status={secrets?.openaiKey ?? emptySecret}
-            />
+          <div className="space-y-6">
+            <div>
+              <h3 className="mb-3 text-xs font-extrabold uppercase tracking-wide text-zinc-700">GitHub</h3>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-zinc-700">GitHub Token</span>
+                <p className="mt-0.5 text-[11px] font-medium text-zinc-600">
+                  Personal Access Token mit Rechten Contents, Actions und Secrets. Wird nur in diesem Browser
+                  gespeichert.{" "}
+                  <a
+                    href="https://github.com/settings/tokens"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-bold text-sky-800 hover:underline"
+                  >
+                    Token erstellen
+                  </a>
+                </p>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={admin.githubToken}
+                  onChange={(e) => admin.setGithubToken(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-zinc-400 bg-white px-3 py-2.5 font-mono text-sm text-zinc-950 outline-none focus:border-zinc-900"
+                />
+              </label>
+            </div>
+            <div>
+              <h3 className="mb-3 text-xs font-extrabold uppercase tracking-wide text-zinc-700">X / Twitter</h3>
+              <p className="mb-3 text-[11px] font-medium text-zinc-600">
+                Developer Portal → App → Keys and tokens.{" "}
+                <a
+                  href="https://developer.x.com/en/portal/dashboard"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-sky-800 hover:underline"
+                >
+                  Portal öffnen
+                </a>
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SecretField
+                  label="X API Key"
+                  value={admin.apiKey}
+                  onChange={admin.setApiKey}
+                  status={secrets?.apiKey ?? emptySecret}
+                />
+                <SecretField
+                  label="X API Secret"
+                  value={admin.apiSecret}
+                  onChange={admin.setApiSecret}
+                  status={secrets?.apiSecret ?? emptySecret}
+                />
+                <SecretField
+                  label="X Access Token"
+                  value={admin.accessToken}
+                  onChange={admin.setAccessToken}
+                  status={secrets?.accessToken ?? emptySecret}
+                />
+                <SecretField
+                  label="X Access Token Secret"
+                  value={admin.accessTokenSecret}
+                  onChange={admin.setAccessTokenSecret}
+                  status={secrets?.accessTokenSecret ?? emptySecret}
+                />
+              </div>
+            </div>
+            <div>
+              <h3 className="mb-3 text-xs font-extrabold uppercase tracking-wide text-zinc-700">ChatGPT / OpenAI</h3>
+              <p className="mb-3 text-[11px] font-medium text-zinc-600">
+                Wird für jeden Post aus dem Prompt neuen Text erzeugt.{" "}
+                <a
+                  href="https://platform.openai.com/api-keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-sky-800 hover:underline"
+                >
+                  API-Key erstellen
+                </a>
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SecretField
+                  label="ChatGPT / OpenAI API Key"
+                  value={admin.openaiKey}
+                  onChange={admin.setOpenaiKey}
+                  status={secrets?.openaiKey ?? emptySecret}
+                />
+              </div>
+            </div>
           </div>
         )}
       </section>

@@ -6,8 +6,10 @@ import { DEFAULT_PROMPT, DEFAULT_PUBLISHER_CONFIG } from "@/lib/publisher-settin
 import {
   dispatchPublishWorkflow,
   GH_TOKEN_KEY,
+  listRepoSecrets,
   loadPublisherFromGitHub,
   savePublisherToGitHub,
+  saveRepoSecrets,
 } from "./x/github";
 
 export const IS_PAGES = process.env.NEXT_PUBLIC_GITHUB_PAGES === "true";
@@ -99,7 +101,7 @@ export function SecretField({
     <label className="block">
       <span className="text-xs font-bold uppercase tracking-wide text-zinc-700">{label}</span>
       <p className="mt-0.5 text-[11px] font-medium text-zinc-600">
-        {status.set ? `Kayıtlı · …${status.last4}` : "Henüz boş"}
+        {status.set ? (status.last4 ? `Kayıtlı · …${status.last4}` : "Kayıtlı") : "Henüz boş"}
       </p>
       <input
         type="text"
@@ -149,6 +151,17 @@ export function usePublisherAdmin() {
     try {
       if (IS_PAGES) {
         const publisher = await loadPublisherFromGitHub();
+        const token = window.localStorage.getItem(GH_TOKEN_KEY) ?? "";
+        let names = new Set<string>();
+        if (token) {
+          try {
+            names = await listRepoSecrets(token);
+          } catch {
+            names = new Set();
+          }
+        }
+        const marked = (name: string): SecretStatus =>
+          names.has(name) ? { set: true, last4: null, value: "" } : emptySecret;
         setEnabled(publisher.enabled);
         setPostsPerRun(publisher.postsPerRun);
         setPrompt(publisher.prompt);
@@ -165,11 +178,11 @@ export function usePublisherAdmin() {
           endHour: publisher.endHour,
           days: publisher.days,
           secrets: {
-            apiKey: emptySecret,
-            apiSecret: emptySecret,
-            accessToken: emptySecret,
-            accessTokenSecret: emptySecret,
-            openaiKey: emptySecret,
+            apiKey: marked("X_API_KEY"),
+            apiSecret: marked("X_API_SECRET"),
+            accessToken: marked("X_ACCESS_TOKEN"),
+            accessTokenSecret: marked("X_ACCESS_TOKEN_SECRET"),
+            openaiKey: marked("OPENAI_API_KEY"),
           },
           posts: [],
           preview: { tweets: [] },
@@ -237,7 +250,23 @@ export function usePublisherAdmin() {
         if (!githubToken.trim()) throw new Error("Ayarları kaydetmek için bir GitHub token girin");
         window.localStorage.setItem(GH_TOKEN_KEY, githubToken.trim());
         await savePublisherToGitHub(githubToken, publisherPayload());
-        setMessage("Ayarlar kaydedildi");
+        const written = await saveRepoSecrets(githubToken, {
+          X_API_KEY: apiKey,
+          X_API_SECRET: apiSecret,
+          X_ACCESS_TOKEN: accessToken,
+          X_ACCESS_TOKEN_SECRET: accessTokenSecret,
+          OPENAI_API_KEY: openaiKey,
+        });
+        setApiKey("");
+        setApiSecret("");
+        setAccessToken("");
+        setAccessTokenSecret("");
+        setOpenaiKey("");
+        setMessage(
+          written.length
+            ? `Ayarlar kaydedildi · ${written.join(", ")} GitHub Secrets’e yazıldı`
+            : "Ayarlar kaydedildi",
+        );
         await load();
         return;
       }
@@ -255,7 +284,23 @@ export function usePublisherAdmin() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Kaydetme başarısız");
-      setMessage("Ayarlar kaydedildi");
+      if (githubToken.trim()) {
+        window.localStorage.setItem(GH_TOKEN_KEY, githubToken.trim());
+        const written = await saveRepoSecrets(githubToken, {
+          X_API_KEY: apiKey,
+          X_API_SECRET: apiSecret,
+          X_ACCESS_TOKEN: accessToken,
+          X_ACCESS_TOKEN_SECRET: accessTokenSecret,
+          OPENAI_API_KEY: openaiKey,
+        });
+        setMessage(
+          written.length
+            ? `Ayarlar kaydedildi · ${written.join(", ")} GitHub Secrets’e yazıldı`
+            : "Ayarlar kaydedildi",
+        );
+      } else {
+        setMessage("Ayarlar kaydedildi");
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kaydetme başarısız");
