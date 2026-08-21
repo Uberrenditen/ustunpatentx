@@ -169,8 +169,9 @@ export default function AdminSettingsPage() {
                   </a>
                 </p>
                 <input
-                  type="password"
+                  type="text"
                   autoComplete="off"
+                  spellCheck={false}
                   value={admin.githubToken}
                   onChange={(e) => admin.setGithubToken(e.target.value)}
                   className="mt-1.5 w-full rounded-xl border border-zinc-400 bg-white px-3 py-2.5 font-mono text-sm text-zinc-950 outline-none focus:border-zinc-900"

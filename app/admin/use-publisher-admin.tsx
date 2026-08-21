@@ -53,6 +53,7 @@ export type Payload = {
   startHour: number;
   endHour: number;
   days: number[];
+  githubToken?: string;
   secrets: {
     apiKey: SecretStatus;
     apiSecret: SecretStatus;
@@ -151,7 +152,7 @@ export function usePublisherAdmin() {
     try {
       if (IS_PAGES) {
         const publisher = await loadPublisherFromGitHub();
-        const token = window.localStorage.getItem(GH_TOKEN_KEY) ?? "";
+        const token = (window.localStorage.getItem(GH_TOKEN_KEY) ?? "").trim();
         let names = new Set<string>();
         if (token) {
           try {
@@ -215,6 +216,10 @@ export function usePublisherAdmin() {
       setAccessToken(json.secrets?.accessToken?.value ?? "");
       setAccessTokenSecret(json.secrets?.accessTokenSecret?.value ?? "");
       setOpenaiKey(json.secrets?.openaiKey?.value ?? "");
+      setGithubToken(
+        json.githubToken?.trim() ||
+          (typeof window !== "undefined" ? window.localStorage.getItem(GH_TOKEN_KEY) ?? "" : ""),
+      );
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Yükleme başarısız");
@@ -228,6 +233,40 @@ export function usePublisherAdmin() {
     }
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const token = githubToken.trim();
+    if (!token) return;
+    window.localStorage.setItem(GH_TOKEN_KEY, token);
+    if (!IS_PAGES) return;
+    if (!token.startsWith("ghp_") && !token.startsWith("github_pat_")) return;
+    let cancelled = false;
+    void listRepoSecrets(token)
+      .then((names) => {
+        if (cancelled) return;
+        const marked = (name: string): SecretStatus =>
+          names.has(name) ? { set: true, last4: null, value: "" } : emptySecret;
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                secrets: {
+                  apiKey: marked("X_API_KEY"),
+                  apiSecret: marked("X_API_SECRET"),
+                  accessToken: marked("X_ACCESS_TOKEN"),
+                  accessTokenSecret: marked("X_ACCESS_TOKEN_SECRET"),
+                  openaiKey: marked("OPENAI_API_KEY"),
+                },
+              }
+            : current,
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [githubToken]);
 
   function publisherPayload() {
     return {

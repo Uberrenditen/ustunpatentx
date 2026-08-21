@@ -29,6 +29,7 @@ export async function GET() {
     endHour: publisher.endHour,
     days: publisher.days,
     secrets: revealedSecrets(config),
+    githubToken: process.env.GITHUB_PAT?.trim() || process.env.GITHUB_TOKEN?.trim() || "",
     updatedAt: config.updatedAt ?? null,
     lastPublishAt: config.lastPublishAt ?? null,
     lastPublishOk: config.lastPublishOk ?? null,
