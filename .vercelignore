@@ -1,0 +1,3 @@
+node_modules_broken
+data/*.json
+.env.local
