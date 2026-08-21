@@ -1,5 +1,12 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function AdminHome() {
-  redirect("/admin/x");
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/admin/x");
+  }, [router]);
+  return null;
 }
