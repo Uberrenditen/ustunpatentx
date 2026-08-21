@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { previewQueue } from "@/lib/publish";
 import {
   DEFAULT_PUBLISHER_CONFIG,
   loadPublisherConfig,
@@ -19,7 +18,7 @@ export async function GET() {
 
   const config = await loadConfig();
   const publisher = await loadPublisherConfig();
-  const [posts, preview] = await Promise.all([listTweets(), previewQueue()]);
+  const posts = (await listTweets()).filter((row) => row.status === "posted");
   return NextResponse.json({
     enabled: publisher.enabled && config.enabled !== false,
     storedEnabled: publisher.enabled,
@@ -37,7 +36,7 @@ export async function GET() {
     lastPublishReason: config.lastPublishReason ?? null,
     lastPublishErrorCode: config.lastPublishErrorCode ?? null,
     posts,
-    preview,
+    preview: { tweets: [] },
   });
 }
 
