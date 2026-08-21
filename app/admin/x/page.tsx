@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GitHubHostingPanel } from "../../github-hosting";
 
 type SecretStatus = { set: boolean; last4: string | null; value: string };
 
@@ -84,6 +85,13 @@ function formatWhen(value: string | null): string {
 }
 
 export default function AdminXPage() {
+  if (process.env.NEXT_PUBLIC_GITHUB_PAGES === "true") {
+    return <GitHubHostingPanel />;
+  }
+  return <AdminXPageLive />;
+}
+
+function AdminXPageLive() {
   const router = useRouter();
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);

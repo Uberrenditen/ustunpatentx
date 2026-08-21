@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { GitHubHostingPanel } from "./github-hosting";
 
 export default function Home() {
-  redirect("/admin/x");
+  return <GitHubHostingPanel />;
 }

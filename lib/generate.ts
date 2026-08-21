@@ -34,6 +34,18 @@ function buildTweet(index: number): string {
   ].join("\n");
 }
 
+export function tweetForNow(now = new Date()): {
+  ticker: string;
+  text: string;
+  hour: number;
+  dateKey: string;
+} {
+  const { dateKey, hour } = getBerlinParts(now);
+  const index = Math.max(0, Math.min(LAST_HOUR, hour) - FIRST_HOUR);
+  const [ticker] = TOPICS[index % TOPICS.length];
+  return { ticker, text: buildTweet(index), hour, dateKey };
+}
+
 export async function regenerateTodayQueue(): Promise<{ dayKey: string; count: number }> {
   const { dateKey } = getBerlinParts();
   const tweets: QueueTweet[] = [];

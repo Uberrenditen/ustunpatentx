@@ -2,8 +2,16 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GitHubHostingPanel } from "../github-hosting";
 
 export default function LoginPage() {
+  if (process.env.NEXT_PUBLIC_GITHUB_PAGES === "true") {
+    return <GitHubHostingPanel />;
+  }
+  return <LoginPageLive />;
+}
+
+function LoginPageLive() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
